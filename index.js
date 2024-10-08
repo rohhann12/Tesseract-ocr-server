@@ -5,9 +5,7 @@ const bodyParser = require('body-parser');
 const app = express();
 app.use(bodyParser.json({ limit: '50mb' }));
 
-const PORT = process.env.PORT || 3000;
-
-const allowedTypes = ['word', 'line', 'paragraph', 'block', 'symbol'];
+const PORT = process.env.PORT || 3001;
 
 app.post('/get-text', async (req, res) => {
   try {
@@ -27,6 +25,8 @@ app.post('/get-text', async (req, res) => {
   }
 });
 
+const allowedTypes = ['word', 'line', 'paragraph', 'block', 'symbol', 'all'];
+
 app.post('/get-boxes', async (req, res) => {
   try {
     const { image, type } = req.body;
@@ -40,13 +40,28 @@ app.post('/get-boxes', async (req, res) => {
     }
 
     const buffer = Buffer.from(image, 'base64');
-    const result = await Tesseract.recognize(buffer, 'eng');
-    const items = result.data[type + 's'];
+    
+    const callAll = async () => {
+      const wordResult = await getBoxes(buffer, 'word');
+      const lineResult = await getBoxes(buffer, 'line');
+      return [...wordResult, ...lineResult];
+    };
 
-    const boxes = items.map(item => ({
-      text: item.text,
-      bbox: item.bbox
-    }));
+    const getBoxes = async (buffer, type) => {
+      const result = await Tesseract.recognize(buffer, 'eng');
+      const items = result.data[type + 's'];
+      return items.map(item => ({
+        text: item.text,
+        bbox: item.bbox
+      }));
+    };
+
+    let boxes;
+    if (type === 'all') {
+      boxes = await callAll();
+    } else {
+      boxes = await getBoxes(buffer, type);
+    }
 
     res.json({ boxes });
   } catch (error) {
